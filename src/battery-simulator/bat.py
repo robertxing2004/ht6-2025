@@ -4,6 +4,8 @@ import pandas as pd
 import socket
 import time
 import struct
+from dotenv import load_dotenv
+import os
 
 # CONFIGURATION VALUES
 
@@ -85,7 +87,8 @@ df["pack_current_a"] = current_pack
 
 print(df.head())
 
-HOST = "127.0.0.1"
+load_dotenv()
+HOST = os.getenv("HOST")
 PORT = 23456
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
