@@ -2,6 +2,7 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>  // Add this for inet_ntoa
 #include <unistd.h>
 #include <thread>
 #include <chrono>
