@@ -1,39 +1,46 @@
 import pybamm
 import numpy as np
 import pandas as pd
+import socket
+import time
+import struct
+
+# CONFIGURATION VALUES
 
 # pack configuration
 num_series = 96
 num_parallel = 72
 
-# load a standard lithium-ion cell model
-model = pybamm.lithium_ion.DFN()
-
-# load default parameters
-param = model.default_parameter_values
-
-# get single cell capacity (A.h) from parameters
-single_cell_capacity = param["Nominal cell capacity [A.h]"]
-
-# calculate nominal pack voltage (approximate)
-nominal_cell_voltage = 3.7  # typical Li-ion cell nominal voltage (V)
-nominal_pack_voltage = nominal_cell_voltage * num_series
-
-# example: discharge power = 5 kW (typical for home storage use)
+# load configuration
 power_discharge = 5000  # watts
 
-# calculate approx current per pack: I = P / V
-current_pack = power_discharge / nominal_pack_voltage
+# create simulation evaluation array (simulate 1 hour discharge)
+t_eval = pybamm.linspace(0, 3600, 361)
+t_eval_np = t_eval.entries.squeeze()
 
-# update parameters to emulate pack behavior
+
+
+model = pybamm.lithium_ion.DFN()
+
+param = model.default_parameter_values
+
+single_cell_capacity = param["Nominal cell capacity [A.h]"]
+
+nominal_cell_voltage = 3.7
+nominal_pack_voltage = nominal_cell_voltage * num_series
+
+current_pack = power_discharge / nominal_pack_voltage
+current_cell = current_pack / num_parallel
+
+
 param.update({
-    # scale capacity by parallel strings
     "Nominal cell capacity [A.h]": single_cell_capacity * num_parallel,
+    "Current function [A]": current_cell,
     
     "Lower voltage cut-off [V]": 2.5,
     "Upper voltage cut-off [V]": 4.1,
     
-    # internal resistance rise and degradation tweaks (example for used battery)
+    # internal resistance rise and degradation tweaks
     "Contact resistance [Ohm]": 0.0025,
     "Negative electrode conductivity [S.m-1]": 1000,
     "Positive electrode conductivity [S.m-1]": 1500,
@@ -43,21 +50,12 @@ param.update({
     "Positive particle diffusivity [m2.s-1]": 5e-14,
     "Negative electrode exchange-current density [A.m-2]": 1.0,
     "Positive electrode exchange-current density [A.m-2]": 1.5,
-
-    "Current function [A]": current_pack
 })
 
-# create simulation
 sim = pybamm.Simulation(model, parameter_values=param)
 
-# create time evaluation array (simulate 1 hour discharge)
-t_eval = pybamm.linspace(0, 3600, 100)
-t_eval_np = t_eval.entries.squeeze()
-
-# solve simulation
 sol = sim.solve(t_eval=t_eval_np)
 
-# extract key results
 variables_to_export = [
     "Time [s]",
     "Terminal voltage [V]",
@@ -81,4 +79,25 @@ for var in variables_to_export:
 
 df = pd.DataFrame(data)
 
+# Add pack-level columns
+df["pack_voltage_v"] = terminal_voltage_pack
+df["pack_current_a"] = current_pack
+
 print(df.head())
+
+#HOST = "192.168.1.100"
+#PORT = 12345
+
+#with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#    s.connect((HOST, PORT))
+#    for i in range(len(df)):
+#        # pack 4 floats into binary
+#        message = struct.pack(
+#            '<ffff',
+#            float(df["time_s"].iloc[i]),
+#            float(df["pack_voltage_v"].iloc[i]),
+#            float(df["pack_current_a"].iloc[i]),
+#            float(df["cell_temperature_c"].iloc[i])
+#        )
+#        s.sendall(message)
+#        time.sleep(0.1)
