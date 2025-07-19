@@ -1,0 +1,74 @@
+{
+    "battery_specifications": {
+        "nominal_capacity_ah": 100.0,
+        "nominal_voltage": 355.2,
+        "max_cycles": 1000,
+        "max_temp": 60.0,
+        "min_temp": -20.0,
+        "max_current": 500.0,
+        "chemistry": "LiFePO4",
+        "cell_configuration": "96S72P",
+        "rated_power": 5000.0
+    },
+    "ai_settings": {
+        "prediction_interval_minutes": 5,
+        "min_data_points": 10,
+        "confidence_threshold": 70.0,
+        "enable_gemini": false,
+        "gemini_api_key": "",
+        "analytical_mode": true
+    },
+    "monitoring_thresholds": {
+        "voltage": {
+            "min": 300.0,
+            "max": 370.0,
+            "critical_low": 280.0,
+            "critical_high": 380.0
+        },
+        "current": {
+            "min": -500.0,
+            "max": 500.0,
+            "critical_low": -600.0,
+            "critical_high": 600.0
+        },
+        "temperature": {
+            "min": -20.0,
+            "max": 60.0,
+            "critical_low": -30.0,
+            "critical_high": 70.0
+        },
+        "health": {
+            "min": 70.0,
+            "warning": 80.0,
+            "critical": 60.0
+        }
+    },
+    "degradation_models": {
+        "temperature_factor": {
+            "optimal_range": [15.0, 35.0],
+            "degradation_multiplier": {
+                "below_optimal": 1.2,
+                "above_optimal": 1.5,
+                "extreme_high": 2.0
+            }
+        },
+        "cycle_degradation": {
+            "base_rate_per_cycle": 0.1,
+            "accelerated_after_cycles": 500,
+            "acceleration_factor": 1.5
+        },
+        "age_degradation": {
+            "monthly_rate": 2.0,
+            "accelerated_after_months": 12,
+            "acceleration_factor": 1.3
+        }
+    },
+    "prediction_parameters": {
+        "voltage_weight": 0.3,
+        "temperature_weight": 0.25,
+        "cycle_weight": 0.25,
+        "age_weight": 0.2,
+        "confidence_decay_rate": 0.1,
+        "prediction_horizon_hours": 168
+    }
+} 
