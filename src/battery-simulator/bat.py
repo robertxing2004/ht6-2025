@@ -85,19 +85,20 @@ df["pack_current_a"] = current_pack
 
 print(df.head())
 
-#HOST = "192.168.1.100"
-#PORT = 12345
+HOST = "127.0.0.1"
+PORT = 12345
 
-#with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-#    s.connect((HOST, PORT))
-#    for i in range(len(df)):
-#        # pack 4 floats into binary
-#        message = struct.pack(
-#            '<ffff',
-#            float(df["time_s"].iloc[i]),
-#            float(df["pack_voltage_v"].iloc[i]),
-#            float(df["pack_current_a"].iloc[i]),
-#            float(df["cell_temperature_c"].iloc[i])
-#        )
-#        s.sendall(message)
-#        time.sleep(0.1)
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.connect((HOST, PORT))
+    print("Sender connected to server")
+    for i in range(len(df)):
+        # pack 4 floats into binary
+        message = struct.pack(
+            '<ffff',
+            float(df["time_s"].iloc[i]),
+            float(df["pack_voltage_v"].iloc[i]),
+            float(df["pack_current_a"].iloc[i]),
+            float(df["cell_temperature_c"].iloc[i])
+        )
+        s.sendall(message)
+        time.sleep(0.1)
