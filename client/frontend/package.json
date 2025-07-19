@@ -1,10 +1,5 @@
 {
-<<<<<<< HEAD
-  "name": "battery-monitor-frontend",
-  "version": "0.1.0",
-=======
   "name": "battery-dashboard",
->>>>>>> 56c669d1681eb405a641c7cc7145cb6af9bb4a23
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,19 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-<<<<<<< HEAD
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.4.2",
-    "chart.js": "^4.4.0",
-    "react-chartjs-2": "^5.2.0",
-    "lucide-react": "^0.294.0",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.0.0"
-=======
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
->>>>>>> 56c669d1681eb405a641c7cc7145cb6af9bb4a23
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

@@ -10,6 +10,7 @@ import os
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import logging
+from battery_ai_predictor import BatteryAIPredictor, BatteryPerformance as AIPerformance
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +45,14 @@ except Exception as e:
     logger.error(f"Failed to connect to MongoDB: {e}")
     client = None
     db = None
+
+# Initialize AI Predictor
+ai_predictor = None
+try:
+    ai_predictor = BatteryAIPredictor(mongo_uri=MONGODB_URI)
+    logger.info("AI Predictor initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize AI Predictor: {e}")
 
 # Pydantic models for data validation
 class BatteryData(BaseModel):
@@ -106,6 +115,30 @@ async def store_battery_data(data: BatteryData):
         # Store in MongoDB
         result = await db.battery_data.insert_one(data.dict())
         logger.info(f"Stored battery data with ID: {result.inserted_id}")
+        
+        # Update AI predictor with new data
+        if ai_predictor:
+            try:
+                # Convert to AI performance format
+                ai_data = AIPerformance(
+                    timestamp=data.timestamp,
+                    pack_voltage=data.pack_voltage,
+                    pack_current=data.pack_current,
+                    cell_temp=data.cell_temp,
+                    # Estimate other fields based on historical data
+                    capacity_remaining=95.0,  # Default estimate
+                    cycle_count=0,  # Would need to be tracked
+                    age_months=6.0,  # Would need to be configured
+                    health_score=90.0  # Would need to be calculated
+                )
+                await ai_predictor.add_performance_data(ai_data)
+                
+                # Generate prediction every 10 data points
+                if len(ai_predictor.performance_history) % 10 == 0:
+                    await ai_predictor.predict_battery_life()
+                    
+            except Exception as e:
+                logger.error(f"Error updating AI predictor: {e}")
         
         return {"message": "Battery data stored successfully", "id": str(result.inserted_id)}
     except Exception as e:
@@ -193,6 +226,59 @@ async def get_latest_battery_prediction():
     except Exception as e:
         logger.error(f"Error retrieving latest battery prediction: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve battery prediction")
+
+# Generate new AI prediction
+@app.post("/api/battery-prediction/generate")
+async def generate_battery_prediction():
+    if not ai_predictor:
+        raise HTTPException(status_code=503, detail="AI predictor not available")
+    
+    try:
+        prediction = await ai_predictor.predict_battery_life()
+        return {
+            "message": "Prediction generated successfully",
+            "prediction": {
+                "timestamp": prediction.timestamp,
+                "remaining_life_hours": prediction.remaining_life_hours,
+                "remaining_cycles": prediction.remaining_cycles,
+                "degradation_rate": prediction.degradation_rate,
+                "confidence_score": prediction.confidence_score,
+                "recommendations": prediction.recommendations or []
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error generating prediction: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate prediction")
+
+# Get AI predictor status
+@app.get("/api/ai-predictor/status")
+async def get_ai_predictor_status():
+    if not ai_predictor:
+        return {"status": "unavailable", "ai_enabled": False}
+    
+    return {
+        "status": "available",
+        "ai_enabled": ai_predictor.ai_enabled,
+        "data_points": len(ai_predictor.performance_history),
+        "predictions_generated": len(ai_predictor.prediction_history)
+    }
+
+# Enable/disable AI predictions
+@app.post("/api/ai-predictor/enable")
+async def enable_ai_predictor(api_key: str = ""):
+    if not ai_predictor:
+        raise HTTPException(status_code=503, detail="AI predictor not available")
+    
+    try:
+        if api_key:
+            ai_predictor.enable_ai(api_key)
+            return {"message": "AI predictions enabled with API key"}
+        else:
+            ai_predictor.disable_ai()
+            return {"message": "AI predictions disabled, using analytical mode"}
+    except Exception as e:
+        logger.error(f"Error configuring AI predictor: {e}")
+        raise HTTPException(status_code=500, detail="Failed to configure AI predictor")
 
 # Get battery data history
 @app.get("/api/battery-data/history")
