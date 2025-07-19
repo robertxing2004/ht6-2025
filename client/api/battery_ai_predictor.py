@@ -50,6 +50,10 @@ class BatteryAIPredictor:
         self.gemini_api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
         self.ai_enabled = bool(self.gemini_api_key)
         
+        if not self.ai_enabled:
+            logger.warning("No Gemini API key found. AI predictions will use analytical mode only.")
+            logger.info("To enable AI predictions, set GEMINI_API_KEY environment variable or use enable_ai() method.")
+        
         # MongoDB connection
         self.mongo_uri = mongo_uri or os.getenv("MONGODB_URI", "")
         self.db = None

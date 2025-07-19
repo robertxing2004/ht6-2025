@@ -11,6 +11,10 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 import logging
 from battery_ai_predictor import BatteryAIPredictor, BatteryPerformance as AIPerformance
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
