@@ -55,6 +55,7 @@ battery_ai_predictor: $(AI_PREDICTOR_OBJECTS)
 clean:
 	rm -f $(LISTENER_OBJECTS) $(MONITOR_OBJECTS) $(TEST_CLIENT_OBJECTS) $(MONITOR_AI_OBJECTS) $(AI_PREDICTOR_OBJECTS) $(TARGETS)
 	rm -f *.log
+	rm -f *.exe
 
 # Install targets (optional)
 install: $(TARGETS)
