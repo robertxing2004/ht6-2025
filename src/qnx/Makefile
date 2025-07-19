@@ -26,19 +26,19 @@ LDFLAGS += -L$(QNX_TARGET)/usr/lib/aarch64
 LIBS = -lsocket -lresolv -lnetwork
 
 # Target binaries
-TARGETS = listener battery_monitor test_client battery_ai_predictor
+TARGETS = listener battery_monitor battery_monitor_backend test_client
 
 # Source files
 LISTENER_SOURCES = listener.cpp
 MONITOR_SOURCES = battery_monitor.cpp
+BACKEND_MONITOR_SOURCES = battery_monitor_backend.cpp
 TEST_CLIENT_SOURCES = test_client.cpp
-AI_PREDICTOR_SOURCES = battery_ai_predictor.cpp
 
 # Object files
 LISTENER_OBJECTS = $(LISTENER_SOURCES:.cpp=.o)
 MONITOR_OBJECTS = $(MONITOR_SOURCES:.cpp=.o)
+BACKEND_MONITOR_OBJECTS = $(BACKEND_MONITOR_SOURCES:.cpp=.o)
 TEST_CLIENT_OBJECTS = $(TEST_CLIENT_SOURCES:.cpp=.o)
-AI_PREDICTOR_OBJECTS = $(AI_PREDICTOR_SOURCES:.cpp=.o)
 
 # Default target
 all: $(TARGETS)
@@ -50,11 +50,11 @@ listener: $(LISTENER_OBJECTS)
 battery_monitor: $(MONITOR_OBJECTS)
 	$(CXX) $(LDFLAGS) $(MONITOR_OBJECTS) $(LIBS) -o battery_monitor
 
+battery_monitor_backend: $(BACKEND_MONITOR_OBJECTS)
+	$(CXX) $(LDFLAGS) $(BACKEND_MONITOR_OBJECTS) -lcurl $(LIBS) -o battery_monitor_backend
+
 test_client: $(TEST_CLIENT_OBJECTS)
 	$(CXX) $(LDFLAGS) $(TEST_CLIENT_OBJECTS) $(LIBS) -o test_client
-
-battery_ai_predictor: $(AI_PREDICTOR_OBJECTS)
-	$(CXX) $(LDFLAGS) $(AI_PREDICTOR_OBJECTS) -lcurl $(LIBS) -o battery_ai_predictor
 
 # Compile source files
 %.o: %.cpp
@@ -62,24 +62,22 @@ battery_ai_predictor: $(AI_PREDICTOR_OBJECTS)
 
 # Clean
 clean:
-	rm -f $(LISTENER_OBJECTS) $(MONITOR_OBJECTS) $(TEST_CLIENT_OBJECTS) $(MONITOR_AI_OBJECTS) $(AI_PREDICTOR_OBJECTS) $(TARGETS)
+	rm -f $(LISTENER_OBJECTS) $(MONITOR_OBJECTS) $(BACKEND_MONITOR_OBJECTS) $(TEST_CLIENT_OBJECTS) $(TARGETS)
 	rm -f *.log
 
 # Install targets (optional)
 install: $(TARGETS)
 	install -m 755 listener /usr/local/bin/
 	install -m 755 battery_monitor /usr/local/bin/
+	install -m 755 battery_monitor_backend /usr/local/bin/
 	install -m 755 test_client /usr/local/bin/
-	install -m 755 battery_monitor_ai /usr/local/bin/
-	install -m 755 battery_ai_predictor /usr/local/bin/
 
 # Uninstall targets
 uninstall:
 	rm -f /usr/local/bin/listener
 	rm -f /usr/local/bin/battery_monitor
+	rm -f /usr/local/bin/battery_monitor_backend
 	rm -f /usr/local/bin/test_client
-	rm -f /usr/local/bin/battery_monitor_ai
-	rm -f /usr/local/bin/battery_ai_predictor
 
 # Debug build
 debug: CXXFLAGS += -g -DDEBUG
