@@ -1,36 +1,187 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Battery Monitor Frontend
+
+A modern, real-time battery monitoring dashboard built with Next.js, TypeScript, and Tailwind CSS. This frontend connects to the battery monitoring API to display real-time battery data, AI predictions, and historical trends.
+
+## Features
+
+- **Real-time Monitoring**: Live battery data updates via WebSocket or REST API polling
+- **AI Predictions**: Display battery life predictions from Google Gemini AI
+- **Interactive Charts**: Visualize voltage, current, and temperature trends
+- **Status Alerts**: Color-coded alerts for different battery conditions
+- **Historical Data**: View recent battery performance history
+- **Responsive Design**: Works on desktop, tablet, and mobile devices
+
+## Components
+
+### Core Components
+- `BatteryDashboard`: Main dashboard orchestrating all components
+- `BatteryStatusCard`: Displays current battery status and alerts
+- `BatteryMetrics`: Shows current voltage, current, temperature, and capacity
+- `AIPredictions`: Displays AI-powered battery life predictions
+- `BatteryCharts`: Visual charts for historical data trends
+- `BatteryHistory`: Table view of recent battery readings
+
+### Data Flow
+1. **WebSocket Connection**: Primary real-time data source
+2. **REST API Fallback**: Polling when WebSocket unavailable
+3. **Data Processing**: Real-time updates and validation
+4. **UI Updates**: Automatic refresh of all components
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+- Battery Monitor API running on `localhost:8000`
+
+### Installation
+
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Start Development Server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Open Browser**:
+   Navigate to `http://localhost:3000`
+
+### Environment Setup
+
+The frontend connects to the battery monitoring API. Make sure the API is running:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# In the API directory
+cd ../api
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API Integration
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### WebSocket Endpoint
+- **URL**: `ws://localhost:8000/ws/battery`
+- **Data**: Real-time battery monitoring data
+- **Fallback**: REST API polling every 5 seconds
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### REST API Endpoints
+- `GET /api/battery/current` - Current battery data
+- `GET /api/battery/prediction` - AI predictions
+- `GET /api/battery/status` - Battery status and alerts
+- `GET /api/battery/stats` - Monitoring statistics
+- `GET /api/battery/history` - Historical data
+- `GET /api/battery/monitor` - Complete monitoring data
 
-## Learn More
+## Data Structure
 
-To learn more about Next.js, take a look at the following resources:
+### Battery Data
+```typescript
+interface BatteryData {
+  timestamp: number;
+  pack_voltage: number;
+  pack_current: number;
+  cell_temp: number;
+  capacity_remaining?: number;
+  cycle_count?: number;
+  age_months?: number;
+  health_score?: number;
+}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### AI Predictions
+```typescript
+interface BatteryPrediction {
+  remaining_life_hours: number;
+  remaining_cycles: number;
+  degradation_rate: number;
+}
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Battery Status
+```typescript
+interface BatteryStatus {
+  alert_level: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'ERROR';
+  message: string;
+}
+```
 
-## Deploy on Vercel
+## Styling
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The frontend uses Tailwind CSS for styling with:
+- **Color-coded alerts**: Green (normal), Yellow (warning), Red (critical)
+- **Responsive grid layouts**: Adapts to different screen sizes
+- **Modern card design**: Clean, professional appearance
+- **Interactive elements**: Hover effects and transitions
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development
+
+### Project Structure
+```
+app/
+├── components/
+│   ├── BatteryDashboard.tsx
+│   ├── BatteryStatusCard.tsx
+│   ├── BatteryMetrics.tsx
+│   ├── AIPredictions.tsx
+│   ├── BatteryCharts.tsx
+│   ├── BatteryHistory.tsx
+│   └── LoadingSpinner.tsx
+├── page.tsx
+├── layout.tsx
+└── globals.css
+```
+
+### Available Scripts
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+
+## Deployment
+
+### Build for Production
+```bash
+npm run build
+npm run start
+```
+
+### Environment Variables
+Create a `.env.local` file for production:
+```env
+NEXT_PUBLIC_API_URL=http://your-api-domain:8000
+NEXT_PUBLIC_WS_URL=ws://your-api-domain:8000
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Errors**:
+   - Ensure the API server is running on port 8000
+   - Check CORS settings in the API
+   - Verify network connectivity
+
+2. **No Data Displayed**:
+   - Check browser console for errors
+   - Verify API endpoints are responding
+   - Ensure WebSocket connection is established
+
+3. **Build Errors**:
+   - Clear `.next` directory: `rm -rf .next`
+   - Reinstall dependencies: `npm install`
+   - Check TypeScript errors: `npm run lint`
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is part of the HT6 Battery Monitoring System.
