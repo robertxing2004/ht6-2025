@@ -86,7 +86,7 @@ df["pack_current_a"] = current_pack
 print(df.head())
 
 HOST = "127.0.0.1"
-PORT = 12345
+PORT = 23456
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
