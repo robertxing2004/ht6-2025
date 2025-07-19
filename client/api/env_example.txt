@@ -1,0 +1,13 @@
+# MongoDB Atlas Connection String
+# Replace with your actual MongoDB Atlas connection string
+MONGODB_URI=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/battery_db?retryWrites=true&w=majority
+
+# Database Configuration
+DATABASE_NAME=battery_db
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# Logging
+LOG_LEVEL=INFO 
