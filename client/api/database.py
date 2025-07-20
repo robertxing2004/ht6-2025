@@ -1,6 +1,6 @@
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId, json_util
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import json
 from typing import Optional, Dict, Any
@@ -80,8 +80,12 @@ def insert_telemetry(telemetry_data: dict):
     
     # Add received_at timestamp if not present
     if "received_at" not in telemetry_data:
-        telemetry_data["received_at"] = datetime.utcnow()
-    
+        telemetry_data["received_at"] = datetime.now(timezone.utc)
+
+    # Ensure anomaly_warning is present (even if None)
+    if "anomaly_warning" not in telemetry_data:
+        telemetry_data["anomaly_warning"] = None
+
     result = collection.insert_one(telemetry_data)
     return str(result.inserted_id)  # Convert ObjectId to string
 
@@ -100,23 +104,25 @@ def get_latest_telemetry(source: Optional[str] = None, limit: int = 1):
     for doc in cursor:
         try:
             serialized = serialize_document(doc)
-            print(f"DEBUG: Successfully serialized doc with _id: {serialized.get('_id')}")
+            print(f"🔍 Retrieved doc: V={serialized.get('pack_voltage', 0):.2f}V, I={serialized.get('pack_current', 0):.2f}A, T={serialized.get('cell_temp', 0):.1f}°C")
             results.append(serialized)
         except Exception as e:
-            print(f"DEBUG: Error serializing doc: {e}")
-            print(f"DEBUG: Doc type: {type(doc)}")
-            print(f"DEBUG: Doc keys: {list(doc.keys()) if hasattr(doc, 'keys') else 'No keys'}")
+            print(f"❌ Error serializing doc: {e}")
+            print(f"🔍 Doc type: {type(doc)}")
+            print(f"🔍 Doc keys: {list(doc.keys()) if hasattr(doc, 'keys') else 'No keys'}")
             # Fallback: create a simple dict
             fallback = {
-                "timestamp": doc.get("timestamp", 0),
-                "pack_voltage": doc.get("pack_voltage", 0),
-                "pack_current": doc.get("pack_current", 0),
-                "cell_temp": doc.get("cell_temp", 0),
-                "source": doc.get("source", "unknown"),
+                "timestamp": float(doc.get("timestamp", 0)),
+                "pack_voltage": float(doc.get("pack_voltage", 0)),
+                "pack_current": float(doc.get("pack_current", 0)),
+                "cell_temp": float(doc.get("cell_temp", 0)),
+                "source": str(doc.get("source", "unknown")),
                 "received_at": doc.get("received_at", ""),
                 "_id": str(doc.get("_id", ""))
             }
             results.append(fallback)
+    
+    print(f"📊 Returning {len(results)} latest telemetry records")
     return results
 
 def get_telemetry_history(source: Optional[str] = None, limit: int = 100, skip: int = 0):
@@ -136,18 +142,20 @@ def get_telemetry_history(source: Optional[str] = None, limit: int = 100, skip: 
             serialized = serialize_document(doc)
             results.append(serialized)
         except Exception as e:
-            print(f"DEBUG: Error serializing history doc: {e}")
+            print(f"❌ Error serializing history doc: {e}")
             # Fallback: create a simple dict
             fallback = {
-                "timestamp": doc.get("timestamp", 0),
-                "pack_voltage": doc.get("pack_voltage", 0),
-                "pack_current": doc.get("pack_current", 0),
-                "cell_temp": doc.get("cell_temp", 0),
-                "source": doc.get("source", "unknown"),
+                "timestamp": float(doc.get("timestamp", 0)),
+                "pack_voltage": float(doc.get("pack_voltage", 0)),
+                "pack_current": float(doc.get("pack_current", 0)),
+                "cell_temp": float(doc.get("cell_temp", 0)),
+                "source": str(doc.get("source", "unknown")),
                 "received_at": doc.get("received_at", ""),
                 "_id": str(doc.get("_id", ""))
             }
             results.append(fallback)
+    
+    print(f"📊 Returning {len(results)} history records")
     return results
 
 def get_telemetry_stats(source: Optional[str] = None):

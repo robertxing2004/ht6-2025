@@ -19,6 +19,7 @@ export interface BatteryData {
   cell_temp: number;
   source: string;
   received_at: string;
+  anomaly_warning?: string; // Add this field for anomaly highlighting
 }
 
 export interface BatteryStats {
@@ -47,7 +48,7 @@ export interface BatteryStats {
 export interface VisualizationRequest {
   source?: string;
   time_range_hours?: number;
-  analysis_type: 'performance' | 'trends' | 'anomalies' | 'summary';
+  analysis_type: 'performance' | 'trends' | 'anomalies' | 'summary' | 'battery_health';
 }
 
 export interface VisualizationResponse {
@@ -61,6 +62,8 @@ export interface VisualizationResponse {
     content: string;
     source: string;
     data_points: number;
+    health_percentage?: number;
+    confidence?: number;
   };
   metadata: {
     time_range: string;
@@ -106,7 +109,10 @@ export const apiService = {
 
   // Generate visualization
   async generateVisualization(request: VisualizationRequest): Promise<VisualizationResponse> {
-    const response = await api.post('/api/battery/visualize', request);
+    // Use a longer timeout for AI-powered visualization
+    const response = await api.post('/api/battery/visualize', request, {
+      timeout: 60000, // 60 seconds for AI processing
+    });
     return response.data;
   },
 
@@ -121,6 +127,43 @@ export const apiService = {
   async sendBatteryData(data: Omit<BatteryData, 'received_at'>) {
     const response = await api.post('/api/battery-data', data);
     return response.data;
+  },
+
+  // Test quick response
+  async testQuickResponse() {
+    const response = await api.get('/api/battery/test-quick');
+    return response.data;
+  },
+
+  // Test Gemini API
+  async testGemini() {
+    const response = await api.get('/api/battery/test-gemini');
+    return response.data;
+  },
+
+  // Calculate SoC dynamically using AI
+  async calculateSoC(voltage: number, current?: number, temperature?: number) {
+    const response = await api.post('/api/battery/calculate-soc', {
+      voltage,
+      current,
+      temperature
+    }, {
+      timeout: 60000 // 60 seconds
+    });
+    return response.data;
+  },
+
+  // Get anomalies
+  async getAnomalies() {
+    try {
+      console.log("Calling /api/battery/anomalies endpoint...");
+      const response = await api.get('/api/battery/anomalies');
+      console.log("Anomalies response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching anomalies:", error);
+      return { anomalies: [] };
+    }
   },
 };
 

@@ -86,6 +86,23 @@ public:
     }
 
 private:
+    std::string get_anomaly_warning(const BatteryData& data, const std::string& battery_name) {
+        if (data.pack_voltage < thresholds.min_voltage) {
+            return battery_name + ": Low Voltage (" + std::to_string(data.pack_voltage) + "V)";
+        } else if (data.pack_voltage > thresholds.max_voltage) {
+            return battery_name + ": High Voltage (" + std::to_string(data.pack_voltage) + "V)";
+        } else if (data.pack_current < thresholds.min_current) {
+            return battery_name + ": Low Current (" + std::to_string(data.pack_current) + "A)";
+        } else if (data.pack_current > thresholds.max_current) {
+            return battery_name + ": High Current (" + std::to_string(data.pack_current) + "A)";
+        } else if (data.cell_temp < thresholds.min_temp) {
+            return battery_name + ": Low Temperature (" + std::to_string(data.cell_temp) + "°C)";
+        } else if (data.cell_temp > thresholds.max_temp) {
+            return battery_name + ": High Temperature (" + std::to_string(data.cell_temp) + "°C)";
+        }
+        return "";
+    }
+
     void send_to_backend(const BatteryData& data) {
         CURL* curl = curl_easy_init();
         if (!curl) {
@@ -94,12 +111,16 @@ private:
         }
         
         // Prepare JSON payload
+        std::string battery_name = "Battery"; // You may want to set this based on the source or context
+        std::string anomaly_warning = get_anomaly_warning(data, battery_name);
+        
         json payload;
         payload["timestamp"] = data.timestamp;
         payload["pack_voltage"] = data.pack_voltage;
         payload["pack_current"] = data.pack_current;
         payload["cell_temp"] = data.cell_temp;
-        payload["source"] = "qnx_monitor";
+        payload["source"] = battery_name;
+        payload["anomaly_warning"] = anomaly_warning;
         
         std::string json_payload = payload.dump();
         

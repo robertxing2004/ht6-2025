@@ -6,6 +6,7 @@ import time
 import struct
 from dotenv import load_dotenv
 import os
+import random
 
 # CONFIGURATION VALUES
 
@@ -182,8 +183,29 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     print(f"\nSender connected to server at {HOST}:{PORT}")
     print("Sending module-level telemetry every 5 seconds...")
     
-    # Send module-level data and individual battery data
+    ANOMALY_PROBABILITY = 0.02  # 40% chance per step
+
     for i in range(len(module_df)):
+        # --- RANDOM ANOMALY GENERATOR (NO LOGGING) ---
+        if random.random() < ANOMALY_PROBABILITY:
+            anomaly_type = random.choice([
+                "low_voltage", "high_voltage",
+                "low_temp", "high_temp",
+                "low_current", "high_current"
+            ])
+            if anomaly_type == "low_voltage":
+                module_df.at[i, "pack_voltage_v"] = 50  # abnormally low
+            elif anomaly_type == "high_voltage":
+                module_df.at[i, "pack_voltage_v"] = 500  # abnormally high
+            elif anomaly_type == "low_temp":
+                module_df.at[i, "cell_temperature_c"] = -20  # abnormally low
+            elif anomaly_type == "high_temp":
+                module_df.at[i, "cell_temperature_c"] = 60  # abnormally high
+            elif anomaly_type == "low_current":
+                module_df.at[i, "pack_current_a"] = 0  # abnormally low
+            elif anomaly_type == "high_current":
+                module_df.at[i, "pack_current_a"] = 100  # abnormally high
+
         # Send module telemetry first
         module_message = struct.pack(
             '<ffff',
@@ -197,10 +219,30 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
               f"Voltage={module_df['pack_voltage_v'].iloc[i]:.1f}V, "
               f"Current={module_df['pack_current_a'].iloc[i]:.1f}A, "
               f"Temp={module_df['cell_temperature_c'].iloc[i]:.1f}°C")
-        
-        # Send individual battery telemetries
+
+        # Send individual battery telemetries with battery name as source
         for battery_name, df in individual_batteries.items():
             if i < len(df):  # Only send if battery has data at this index
+                # Inject anomaly for individual battery
+                if random.random() < ANOMALY_PROBABILITY:
+                    anomaly_type = random.choice([
+                        "low_voltage", "high_voltage",
+                        "low_temp", "high_temp",
+                        "low_current", "high_current"
+                    ])
+                    if anomaly_type == "low_voltage":
+                        df.at[i, "pack_voltage_v"] = 50
+                    elif anomaly_type == "high_voltage":
+                        df.at[i, "pack_voltage_v"] = 500
+                    elif anomaly_type == "low_temp":
+                        df.at[i, "cell_temperature_c"] = -20
+                    elif anomaly_type == "high_temp":
+                        df.at[i, "cell_temperature_c"] = 100
+                    elif anomaly_type == "low_current":
+                        df.at[i, "pack_current_a"] = 0
+                    elif anomaly_type == "high_current":
+                        df.at[i, "pack_current_a"] = 100
+
                 battery_message = struct.pack(
                     '<ffff',
                     float(df["time_s"].iloc[i]),

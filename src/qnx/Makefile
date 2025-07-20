@@ -17,6 +17,7 @@ CXXFLAGS = -Wall -Wextra -std=c++11 -O2 -pthread
 CXXFLAGS += -D_QNX_SOURCE
 CXXFLAGS += -I$(QNX_TARGET)/usr/include
 CXXFLAGS += -I$(QNX_TARGET)/usr/include/aarch64
+CXXFLAGS += -I./include
 
 # Linker flags
 LDFLAGS = -L$(QNX_TARGET)/usr/lib
@@ -45,7 +46,7 @@ all: $(TARGETS)
 
 # Build targets
 listener: $(LISTENER_OBJECTS)
-	$(CXX) $(LDFLAGS) $(LISTENER_OBJECTS) $(LIBS) -o listener
+	$(CXX) $(LDFLAGS) $(LISTENER_OBJECTS) -lcurl $(LIBS) -o listener
 
 battery_monitor: $(MONITOR_OBJECTS)
 	$(CXX) $(LDFLAGS) $(MONITOR_OBJECTS) $(LIBS) -o battery_monitor

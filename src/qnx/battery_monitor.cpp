@@ -14,6 +14,8 @@
 #include <ctime>
 #include <signal.h>
 #include <errno.h>
+#include <curl/curl.h>
+#include <nlohmann/json.hpp>
 
 // Battery data structure - matches Python bat.py format
 struct BatteryData {
@@ -289,35 +291,78 @@ private:
     }
     
     AlertLevel get_alert_level(const BatteryData& data) {
+        // CRITICAL for out-of-bounds voltage, current, or temperature
         if (data.pack_voltage < thresholds.min_voltage || data.pack_voltage > thresholds.max_voltage) {
             return CRITICAL;
         }
         if (data.pack_current < thresholds.min_current || data.pack_current > thresholds.max_current) {
-            return WARNING;
+            return CRITICAL;
         }
         if (data.cell_temp < thresholds.min_temp || data.cell_temp > thresholds.max_temp) {
             return CRITICAL;
         }
+        // WARNING for near-thresholds (10% margin)
+        if (data.pack_voltage < thresholds.min_voltage * 1.1 || data.pack_voltage > thresholds.max_voltage * 0.9) {
+            return WARNING;
+        }
+        if (data.pack_current < thresholds.min_current * 1.1 || data.pack_current > thresholds.max_current * 0.9) {
+            return WARNING;
+        }
+        if (data.cell_temp < thresholds.min_temp + 5 || data.cell_temp > thresholds.max_temp - 5) {
+            return WARNING;
+        }
         return NORMAL;
     }
     
-    void check_alerts(const BatteryData& data) {
+    void send_anomaly_to_backend(const BatteryData& data, const std::string& battery_name, const std::string& anomaly_warning) {
+        using json = nlohmann::json;
+        CURL* curl = curl_easy_init();
+        if (!curl) return;
+        json payload;
+        payload["timestamp"] = data.timestamp;
+        payload["pack_voltage"] = data.pack_voltage;
+        payload["pack_current"] = data.pack_current;
+        payload["cell_temp"] = data.cell_temp;
+        payload["source"] = battery_name;
+        payload["anomaly_warning"] = anomaly_warning;
+        std::string json_payload = payload.dump();
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8000/api/battery-data");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        CURLcode res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            std::cerr << "Failed to send anomaly to backend: " << curl_easy_strerror(res) << std::endl;
+        } else {
+            std::cout << "Anomaly sent to backend: " << json_payload << std::endl;
+        }
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+
+    void check_alerts(const BatteryData& data, const std::string& battery_name = "Battery") {
         AlertLevel level = get_alert_level(data);
-        
-        if (level != NORMAL) {
-            std::string alert_msg = "ALERT: ";
+        if (level == CRITICAL) {
+            std::string anomaly_warning;
             if (data.pack_voltage < thresholds.min_voltage) {
-                alert_msg += "Low voltage (" + std::to_string(data.pack_voltage) + "V)";
+                anomaly_warning = battery_name + ": Low voltage (" + std::to_string(data.pack_voltage) + "V)";
             } else if (data.pack_voltage > thresholds.max_voltage) {
-                alert_msg += "High voltage (" + std::to_string(data.pack_voltage) + "V)";
-            } else if (data.cell_temp > thresholds.max_temp) {
-                alert_msg += "High temperature (" + std::to_string(data.cell_temp) + "°C)";
+                anomaly_warning = battery_name + ": High voltage (" + std::to_string(data.pack_voltage) + "V)";
+            } else if (data.pack_current < thresholds.min_current) {
+                anomaly_warning = battery_name + ": Low current (" + std::to_string(data.pack_current) + "A)";
+            } else if (data.pack_current > thresholds.max_current) {
+                anomaly_warning = battery_name + ": High current (" + std::to_string(data.pack_current) + "A)";
             } else if (data.cell_temp < thresholds.min_temp) {
-                alert_msg += "Low temperature (" + std::to_string(data.cell_temp) + "°C)";
+                anomaly_warning = battery_name + ": Low temperature (" + std::to_string(data.cell_temp) + "°C)";
+            } else if (data.cell_temp > thresholds.max_temp) {
+                anomaly_warning = battery_name + ": High temperature (" + std::to_string(data.cell_temp) + "°C)";
             }
-            
-            log_warning(alert_msg);
-            std::cout << "\033[31m" << alert_msg << "\033[0m" << std::endl;
+            // Send anomaly to backend instead of logging/printing
+            send_anomaly_to_backend(data, battery_name, anomaly_warning);
+            // log_warning(anomaly_warning);
+            // std::cout << "\033[31m" << anomaly_warning << "\033[0m" << std::endl;
         }
     }
     

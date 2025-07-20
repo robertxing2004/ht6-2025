@@ -1,6 +1,5 @@
 import React from 'react';
-import Dashboard from './components/Dashboard';
-import './App.css';
+import { BatteryDashboard } from './components/BatteryDashboard';
 
 function App() {
   // Get source from URL parameters
@@ -9,7 +8,7 @@ function App() {
 
   return (
     <div className="App">
-      <Dashboard selectedSource={selectedSource} />
+      <BatteryDashboard selectedSource={selectedSource} />
     </div>
   );
 }
