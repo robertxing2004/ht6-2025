@@ -43,7 +43,7 @@ bool sendToBackend(float timestamp, float pack_voltage, float pack_current, floa
 
     std::string response;
 
-    curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:8000/api/battery-data");
+    curl_easy_setopt(curl, CURLOPT_URL, "http://10.33.47.104:8000/api/battery-data");
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
@@ -119,7 +119,7 @@ int main() {
     }
 
     std::cout << "Listening on port " << PORT << "..." << std::endl;
-    std::cout << "Will send data to FastAPI backend at http://localhost:8000" << std::endl;
+    std::cout << "Will send data to FastAPI backend at http://10.33.47.104:8000/api/battery-data" << std::endl;
 
     while (true) {
         std::cout << "Waiting for client connection..." << std::endl;
