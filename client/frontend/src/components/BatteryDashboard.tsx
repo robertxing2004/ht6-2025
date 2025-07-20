@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import logo from '../assets/logo.png';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { Progress } from "./ui/progress"
@@ -438,9 +439,12 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
     <div className="p-6 space-y-6">
       {/* Dashboard Title */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-          Revamp
-        </h1>
+        <div className="flex items-center space-x-2">
+          <img src={ logo } alt="Logo" className="h-8 w-8" />
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+            Revamp
+          </h1>
+        </div>
         <div className="text-sm text-gray-500">
           Last updated: {new Date().toLocaleTimeString()}
         </div>
