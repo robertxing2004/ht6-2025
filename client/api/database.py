@@ -1,7 +1,9 @@
 from pymongo import MongoClient, ASCENDING, DESCENDING
+from bson import ObjectId, json_util
 from datetime import datetime
 import os
-from typing import Optional
+import json
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
 # Load environment variables from .env file at project root
@@ -30,6 +32,15 @@ print(f"🔍 Database name: {DATABASE_NAME}")
 
 # Global MongoDB client
 client: Optional[MongoClient] = None
+
+def serialize_document(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert MongoDB document to JSON-serializable format using MongoDB's json_util"""
+    if doc is None:
+        return None
+    
+    # Use MongoDB's json_util to handle all MongoDB types
+    json_str = json_util.dumps(doc)
+    return json.loads(json_str)
 
 def connect_to_mongo():
     """Connect to MongoDB"""
@@ -72,7 +83,7 @@ def insert_telemetry(telemetry_data: dict):
         telemetry_data["received_at"] = datetime.utcnow()
     
     result = collection.insert_one(telemetry_data)
-    return result.inserted_id
+    return str(result.inserted_id)  # Convert ObjectId to string
 
 def get_latest_telemetry(source: Optional[str] = None, limit: int = 1):
     """Get latest telemetry data"""
@@ -84,7 +95,29 @@ def get_latest_telemetry(source: Optional[str] = None, limit: int = 1):
         filter_query["source"] = source
     
     cursor = collection.find(filter_query).sort("received_at", DESCENDING).limit(limit)
-    return list(cursor)
+    # Serialize documents for JSON response
+    results = []
+    for doc in cursor:
+        try:
+            serialized = serialize_document(doc)
+            print(f"DEBUG: Successfully serialized doc with _id: {serialized.get('_id')}")
+            results.append(serialized)
+        except Exception as e:
+            print(f"DEBUG: Error serializing doc: {e}")
+            print(f"DEBUG: Doc type: {type(doc)}")
+            print(f"DEBUG: Doc keys: {list(doc.keys()) if hasattr(doc, 'keys') else 'No keys'}")
+            # Fallback: create a simple dict
+            fallback = {
+                "timestamp": doc.get("timestamp", 0),
+                "pack_voltage": doc.get("pack_voltage", 0),
+                "pack_current": doc.get("pack_current", 0),
+                "cell_temp": doc.get("cell_temp", 0),
+                "source": doc.get("source", "unknown"),
+                "received_at": doc.get("received_at", ""),
+                "_id": str(doc.get("_id", ""))
+            }
+            results.append(fallback)
+    return results
 
 def get_telemetry_history(source: Optional[str] = None, limit: int = 100, skip: int = 0):
     """Get historical telemetry data"""
@@ -96,7 +129,26 @@ def get_telemetry_history(source: Optional[str] = None, limit: int = 100, skip: 
         filter_query["source"] = source
     
     cursor = collection.find(filter_query).sort("received_at", DESCENDING).skip(skip).limit(limit)
-    return list(cursor)
+    # Serialize documents for JSON response
+    results = []
+    for doc in cursor:
+        try:
+            serialized = serialize_document(doc)
+            results.append(serialized)
+        except Exception as e:
+            print(f"DEBUG: Error serializing history doc: {e}")
+            # Fallback: create a simple dict
+            fallback = {
+                "timestamp": doc.get("timestamp", 0),
+                "pack_voltage": doc.get("pack_voltage", 0),
+                "pack_current": doc.get("pack_current", 0),
+                "cell_temp": doc.get("cell_temp", 0),
+                "source": doc.get("source", "unknown"),
+                "received_at": doc.get("received_at", ""),
+                "_id": str(doc.get("_id", ""))
+            }
+            results.append(fallback)
+    return results
 
 def get_telemetry_stats(source: Optional[str] = None):
     """Get telemetry statistics"""
@@ -140,6 +192,10 @@ def get_telemetry_stats(source: Optional[str] = None):
     stats_result = list(collection.aggregate(pipeline))
     stats = stats_result[0] if stats_result else {}
     
+    # Remove the _id field from stats if it exists (it's always None in this aggregation)
+    if "_id" in stats:
+        del stats["_id"]
+    
     return {
         "total_readings": total_count,
         "voltage": {
@@ -160,7 +216,7 @@ def get_telemetry_stats(source: Optional[str] = None):
             "max": stats.get("max_temp", 0),
             "avg": stats.get("avg_temp", 0)
         },
-        "last_update": latest_data["received_at"].isoformat()
+        "last_update": latest_data["received_at"]  # Already serialized by get_latest_telemetry
     }
 
 def get_sources():

@@ -74,9 +74,36 @@ def prepare_telemetry_dataframe(telemetry_data: List[Dict]) -> pd.DataFrame:
     if not telemetry_data:
         return pd.DataFrame()
     
+    # Debug: Check the first record
+    if telemetry_data:
+        first_record = telemetry_data[0]
+        print(f"DEBUG: First record keys: {list(first_record.keys())}")
+        print(f"DEBUG: received_at type: {type(first_record.get('received_at'))}")
+        print(f"DEBUG: received_at value: {first_record.get('received_at')}")
+        print(f"DEBUG: timestamp type: {type(first_record.get('timestamp'))}")
+        print(f"DEBUG: timestamp value: {first_record.get('timestamp')}")
+    
     df = pd.DataFrame(telemetry_data)
-    df['received_at'] = pd.to_datetime(df['received_at'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+    
+    # Handle received_at - it might be a dict from MongoDB json_util
+    if 'received_at' in df.columns:
+        # Check if it's a dict (MongoDB datetime object)
+        if df['received_at'].dtype == 'object':
+            # Convert dict datetime objects to strings first
+            df['received_at'] = df['received_at'].apply(lambda x: 
+                x.get('$date') if isinstance(x, dict) and '$date' in x else x
+            )
+        df['received_at'] = pd.to_datetime(df['received_at'])
+    
+    # Handle timestamp
+    if 'timestamp' in df.columns:
+        if df['timestamp'].dtype == 'object':
+            # Convert dict timestamp objects to strings first
+            df['timestamp'] = df['timestamp'].apply(lambda x: 
+                x.get('$date') if isinstance(x, dict) and '$date' in x else x
+            )
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
     return df.sort_values('received_at')
 
 def create_performance_visualization(df: pd.DataFrame, source: str = None) -> str:
