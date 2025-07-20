@@ -20,7 +20,7 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* use
 }
 
 // Function to send data to FastAPI backend
-bool sendToBackend(float timestamp, float pack_voltage, float pack_current, float cell_temp) {
+bool sendToBackend(float timestamp, float pack_voltage, float pack_current, float cell_temp, const std::string& source) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         std::cerr << "Failed to initialize CURL" << std::endl;
@@ -33,7 +33,7 @@ bool sendToBackend(float timestamp, float pack_voltage, float pack_current, floa
     root["pack_voltage"] = pack_voltage;
     root["pack_current"] = pack_current;
     root["cell_temp"] = cell_temp;
-    root["source"] = "qnx_listener";
+    root["source"] = source;
 
     std::string json_payload = root.dump();
 
@@ -136,38 +136,57 @@ int main() {
 
         // Read loop
         while (true) {
-            float values[4];
-            ssize_t bytes_read = recv(client_fd, values, sizeof(values), MSG_WAITALL);
+            // Read a batch of 4 messages (module + 3 batteries)
+            std::vector<std::string> message_types = {"Module", "Battery_1", "Battery_2", "Battery_3"};
+            std::vector<bool> messages_received(4, false);
             
-            if (bytes_read <= 0) {
-                std::cout << "Client disconnected" << std::endl;
-                break;
-            }
-
-            if (bytes_read == sizeof(values)) {
-                float timestamp = values[0];
-                float pack_voltage = values[1];
-                float pack_current = values[2];
-                float cell_temp = values[3];
-
-                // Display received data
-                std::cout << "Received: Time=" << timestamp 
-                          << "s, Voltage=" << pack_voltage 
-                          << "V, Current=" << pack_current 
-                          << "A, Temp=" << cell_temp << "°C" << std::endl;
-
-                // Send to FastAPI backend
-                bool success = sendToBackend(timestamp, pack_voltage, pack_current, cell_temp);
+            for (int msg_idx = 0; msg_idx < 4; msg_idx++) {
+                float values[4];
+                ssize_t bytes_read = recv(client_fd, values, sizeof(values), MSG_WAITALL);
                 
-                if (!success) {
-                    std::cerr << "Failed to send data to backend, retrying..." << std::endl;
-                    // Wait a bit before retrying
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                if (bytes_read <= 0) {
+                    std::cout << "Client disconnected" << std::endl;
+                    goto client_disconnected;
                 }
-            } else {
-                std::cerr << "Incomplete data received: " << bytes_read << " bytes" << std::endl;
+
+                if (bytes_read == sizeof(values)) {
+                    float timestamp = values[0];
+                    float pack_voltage = values[1];
+                    float pack_current = values[2];
+                    float cell_temp = values[3];
+
+                    // Display received data with message type
+                    std::cout << "Received " << message_types[msg_idx] << ": Time=" << timestamp 
+                              << "s, Voltage=" << pack_voltage 
+                              << "V, Current=" << pack_current 
+                              << "A, Temp=" << cell_temp << "°C" << std::endl;
+
+                    // Send to FastAPI backend with source identification
+                    std::string source = "qnx_listener_" + message_types[msg_idx];
+                    bool success = sendToBackend(timestamp, pack_voltage, pack_current, cell_temp, source);
+                    
+                    if (!success) {
+                        std::cerr << "Failed to send " << message_types[msg_idx] << " data to backend, retrying..." << std::endl;
+                        // Wait a bit before retrying
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    } else {
+                        messages_received[msg_idx] = true;
+                    }
+                } else {
+                    std::cerr << "Incomplete data received for " << message_types[msg_idx] 
+                              << ": " << bytes_read << " bytes" << std::endl;
+                }
             }
+            
+            // Summary of batch processing
+            std::cout << "Batch complete: ";
+            for (int i = 0; i < 4; i++) {
+                std::cout << message_types[i] << "(" << (messages_received[i] ? "✓" : "✗") << ") ";
+            }
+            std::cout << std::endl;
         }
+        
+        client_disconnected:
 
         close(client_fd);
     }
