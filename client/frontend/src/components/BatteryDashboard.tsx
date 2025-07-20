@@ -40,22 +40,22 @@ interface Anomaly {
   cell_temp: number;
 }
 
-// Add these threshold constants to match bat.py
+// Update the threshold constants to match bat.py
 const NORMAL_THRESHOLDS = {
-  voltage: { min: 3.0, max: 4.2, unit: 'V' },
-  current: { min: -50, max: 50, unit: 'A' },
-  temperature: { min: -20, max: 60, unit: '°C' }
+  voltage: { min: 50, max: 500, unit: 'V' },  // Match bat.py thresholds
+  current: { min: 0, max: 100, unit: 'A' },   // Match bat.py thresholds
+  temperature: { min: -20, max: 60, unit: '°C' }  // Match bat.py thresholds
 };
 
 // Helper to group anomalies by battery
-function groupAnomaliesByBattery(anomalies: Anomaly[]) {
+const groupAnomaliesByBattery = (anomalies: Anomaly[]): Record<string, Anomaly[]> => {
   return anomalies.reduce((groups: Record<string, Anomaly[]>, anomaly) => {
     const battery = anomaly.source || 'Unknown Battery';
     if (!groups[battery]) groups[battery] = [];
     groups[battery].push(anomaly);
     return groups;
   }, {});
-}
+};
 
 // Helper to extract value from anomaly warning message
 function extractValueFromWarning(warning: string): number | null {
@@ -96,6 +96,21 @@ function formatTimeOnly(dateStr: string): string {
   } catch (e) {
     return "Recent";
   }
+}
+
+// Helper to check if a value is anomalous
+function isValueAnomalous(value: number, type: 'voltage' | 'current' | 'temperature'): boolean {
+  const threshold = NORMAL_THRESHOLDS[type];
+  return value <= threshold.min || value >= threshold.max;
+}
+
+// Helper to get severity class for anomalous values
+function getAnomalySeverityClass(value: number, type: 'voltage' | 'current' | 'temperature'): string {
+  const threshold = NORMAL_THRESHOLDS[type];
+  if (value <= threshold.min || value >= threshold.max) {
+    return 'text-red-500 font-bold';
+  }
+  return '';
 }
 
 export function BatteryDashboard({ selectedSource }: DashboardProps) {
@@ -154,9 +169,11 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
     }
   };
 
+  // Update the fetchData function to handle retries
   const fetchData = async () => {
     try {
       setLoading(true)
+      setError(null)  // Clear any previous errors
       
       // Fetch all data in parallel
       const [currentResponse, historyResponse, statsResponse, sourcesResponse] = await Promise.all([
@@ -190,7 +207,6 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
       }
       
       setLastUpdated(new Date())
-      setError(null)
     } catch (err) {
       console.error('❌ Error fetching data:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
@@ -364,12 +380,6 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
     return { status: "Critical", color: "bg-red-500", textColor: "text-red-700", soc }
   }
 
-  // Helper to check if a value is anomalous
-  const isValueAnomalous = (value: number, type: 'voltage' | 'current' | 'temperature'): boolean => {
-    const threshold = NORMAL_THRESHOLDS[type];
-    return value < threshold.min || value > threshold.max;
-  };
-
   if (loading && !currentData) {
     return (
       <div className="p-6 space-y-6">
@@ -390,7 +400,32 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900">🔋 Battery Management System</h2>
             <p className="text-red-600 mt-2">Error: {error}</p>
-            <Button onClick={fetchData} className="mt-4">Retry</Button>
+            <Button 
+              onClick={() => {
+                setLoading(true);
+                setError(null);
+                Promise.all([
+                  fetchData(),
+                  fetchAnomalies()
+                ]).catch(err => {
+                  console.error('Retry failed:', err);
+                  setError(err instanceof Error ? err.message : 'Retry failed');
+                }).finally(() => setLoading(false));
+              }} 
+              className="mt-4"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </div>
@@ -519,7 +554,7 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
             </Card>
           </div>
 
-          {/* Battery Details and Health Analysis */}
+          {/* Battery Details and History */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Battery Details */}
             <div className="xl:col-span-2">
@@ -717,67 +752,61 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
               </Tabs>
             </div>
 
-            {/* Real Battery Health Analysis */}
-            <div className="space-y-4">
-              {/* SoC Analysis */}
-              {socData && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Battery className="w-5 h-5 text-blue-500" />
-                      AI State of Charge Analysis
-                    </CardTitle>
-                    <CardDescription>
-                      Dynamic battery type detection and SoC calculation
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium">Battery Type:</span> {socData.battery_type}
-                      </div>
-                      <div>
-                        <span className="font-medium">Cell Count:</span> {socData.cell_count || 'Unknown'}
-                      </div>
-                      <div>
-                        <span className="font-medium">Confidence:</span> {socData.confidence?.toFixed(1)}%
-                      </div>
-                      <div>
-                        <span className="font-medium">Cell Voltage:</span> {socData.cell_voltage?.toFixed(2)}V
-                      </div>
-                    </div>
-                    {socData.reasoning && (
-                      <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded">
-                        <span className="font-medium">AI Reasoning:</span> {socData.reasoning}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Battery Health Analysis */}
+            {/* AI Analysis */}
+            <div className="xl:col-span-3">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Lightbulb className="w-5 h-5 text-yellow-500" />
-                    AI Battery Health Analysis
+                    Battery Health Analysis
                   </CardTitle>
-                  <CardDescription>Real-time battery health prediction based on performance data</CardDescription>
+                  <CardDescription>Real-time performance insights</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent>
                   {healthLoading ? (
                     <div className="text-center py-4 space-y-3">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                      <p className="text-sm text-gray-600">Analyzing battery health with AI...</p>
-                      <p className="text-xs text-gray-500">This may take up to 60 seconds</p>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+                      <p className="text-sm text-gray-600">Analyzing battery performance...</p>
                     </div>
                   ) : batteryHealth ? (
-                    <div className="prose prose-sm max-w-none">
-                      <div className="whitespace-pre-wrap text-sm text-gray-700">{batteryHealth}</div>
+                    <div className="space-y-4">
+                      {/* Analysis Text */}
+                      <div className="prose prose-sm max-w-none">
+                        {batteryHealth.split('\n').map((line, i) => (
+                          line.trim() && (
+                            <p key={i} className="text-gray-700 leading-relaxed">
+                              {line.trim()}
+                            </p>
+                          )
+                        ))}
+                      </div>
+
+                      {/* Refresh Button */}
+                      <div className="flex justify-end pt-4">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={generateBatteryHealth}
+                          disabled={healthLoading}
+                          className="w-auto"
+                        >
+                          {healthLoading ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Update Analysis
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-sm text-gray-600">No health analysis available</p>
+                      <p className="text-sm text-gray-600">No analysis available</p>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -831,24 +860,57 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
                 )}
               </CardHeader>
               <CardContent className="p-0"> {/* Remove padding for scrollable content */}
+                {/* Anomalies Section */}
                 <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
                   {filteredAnomalies.length > 0 ? (
                     <div className="space-y-1 p-4">
-                      {filteredAnomalies.map((anomaly, idx) => (
-                        <Alert key={idx} variant="destructive" className="py-2">
-                          <AlertTitle className="text-xs flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <AlertTriangle className="h-3 w-3" />
-                              <span className="font-medium">{anomaly.source}</span>
-                            </div>
-                            <span className="text-xs opacity-75">
-                              {formatDateTime(anomaly.received_at)}
-                            </span>
-                          </AlertTitle>
-                          <AlertDescription className="text-sm mt-1">
-                            {anomaly.anomaly_warning}
-                          </AlertDescription>
-                        </Alert>
+                      {Object.entries(groupAnomaliesByBattery(filteredAnomalies)).map(([battery, batteryAnomalies]) => (
+                        <div key={battery} className="mb-4">
+                          <h4 className="text-sm font-medium mb-2">{battery}</h4>
+                          {batteryAnomalies.map((anomaly, idx) => (
+                            <Alert key={idx} variant="destructive" className="py-2">
+                              <AlertTitle className="text-xs flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span className="font-medium">{anomaly.source}</span>
+                                </div>
+                                <span className="text-xs opacity-75">
+                                  {formatDateTime(anomaly.received_at)}
+                                </span>
+                              </AlertTitle>
+                              <AlertDescription className="mt-1">
+                                <div className="text-sm font-medium mb-1">{anomaly.anomaly_warning}</div>
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                  <div>
+                                    <span className="text-gray-200">Voltage: </span>
+                                    <span className={getAnomalySeverityClass(anomaly.pack_voltage, 'voltage')}>
+                                      {anomaly.pack_voltage.toFixed(1)}V
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-200">Current: </span>
+                                    <span className={getAnomalySeverityClass(anomaly.pack_current, 'current')}>
+                                      {anomaly.pack_current.toFixed(1)}A
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-200">Temperature: </span>
+                                    <span className={getAnomalySeverityClass(anomaly.cell_temp, 'temperature')}>
+                                      {anomaly.cell_temp.toFixed(1)}°C
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-300 mt-1">
+                                  {(() => {
+                                    const { type } = getThresholdType(anomaly.anomaly_warning);
+                                    const threshold = NORMAL_THRESHOLDS[type];
+                                    return `Normal range: ${threshold.min} - ${threshold.max} ${threshold.unit}`;
+                                  })()}
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                          ))}
+                        </div>
                       ))}
                     </div>
                   ) : (

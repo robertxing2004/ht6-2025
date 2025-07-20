@@ -5,11 +5,29 @@ const API_BASE_URL = 'http://localhost:8000';
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000,  // Increase timeout to 30 seconds
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Add response interceptor for error handling
+api.interceptors.response.use(
+  response => response,
+  async error => {
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      console.log('Request timed out, retrying...');
+      const config = error.config;
+      // Retry the request
+      try {
+        return await axios.request(config);
+      } catch (retryError) {
+        return Promise.reject(retryError);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export interface BatteryData {

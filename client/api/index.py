@@ -59,21 +59,46 @@ anomaly_router = APIRouter()
 async def get_anomalies():
     """Get battery telemetry records with specific anomaly types (matching bat.py)"""
     try:
+        print("🔍 Fetching anomalies from database...")
         db = get_database()
         collection = db.battery_telemetry
+        
+        # Debug: Print collection info
+        print(f"📊 Collection name: {collection.name}")
+        print(f"📊 Total documents: {collection.count_documents({})}")
+        
         # Only find records with specific anomaly types from bat.py
-        anomalies = list(collection.find({
+        query = {
             "anomaly_warning": {
                 "$exists": True,
                 "$ne": None,
                 "$regex": "(Low|High) (Voltage|Temperature|Current)"  # Only match these specific patterns
             }
-        }).sort("received_at", -1))
+        }
         
-        print(f"Found {len(anomalies)} valid anomalies in database")
-        return {"anomalies": [serialize_document(a) for a in anomalies]}
+        # Debug: Print query
+        print(f"🔍 Query: {query}")
+        
+        # Execute query
+        anomalies = list(collection.find(query).sort("received_at", -1))
+        
+        # Debug: Print results
+        print(f"✅ Found {len(anomalies)} valid anomalies")
+        if anomalies:
+            print("📝 Sample anomaly:", {
+                "source": anomalies[0].get("source"),
+                "warning": anomalies[0].get("anomaly_warning"),
+                "voltage": anomalies[0].get("pack_voltage"),
+                "current": anomalies[0].get("pack_current"),
+                "temp": anomalies[0].get("cell_temp")
+            })
+        
+        # Serialize and return
+        serialized = [serialize_document(a) for a in anomalies]
+        print(f"📤 Returning {len(serialized)} serialized anomalies")
+        return {"anomalies": serialized}
     except Exception as e:
-        print(f"Error fetching anomalies: {e}")
+        print(f"❌ Error fetching anomalies: {e}")
         return {"anomalies": [], "error": str(e)}
 
 # Include the router in the app
@@ -211,14 +236,14 @@ def analyze_with_gemini(df: pd.DataFrame, analysis_type: str, source: str = None
     """Use Gemini AI to analyze the telemetry data"""
     if not gemini_model:
         return {
-            "content": "Gemini API not configured. Please set GEMINI_API_KEY in your .env file.",
+            "content": "Gemini API not configured",
             "health_percentage": None,
             "confidence": None
         }
     
     if df.empty:
         return {
-            "content": "No data available for analysis",
+            "content": "No data available",
             "health_percentage": None,
             "confidence": None
         }
@@ -226,187 +251,88 @@ def analyze_with_gemini(df: pd.DataFrame, analysis_type: str, source: str = None
     # Prepare data summary for Gemini
     data_summary = {
         "total_readings": len(df),
-        "time_range": f"{df['received_at'].min()} to {df['received_at'].max()}",
-        "voltage_stats": {
-            "mean": df['pack_voltage'].mean(),
-            "min": df['pack_voltage'].min(),
-            "max": df['pack_voltage'].max(),
-            "std": df['pack_voltage'].std()
-        },
-        "current_stats": {
-            "mean": df['pack_current'].mean(),
-            "min": df['pack_current'].min(),
-            "max": df['pack_current'].max(),
-            "std": df['pack_current'].std()
-        },
-        "temperature_stats": {
-            "mean": df['cell_temp'].mean(),
-            "min": df['cell_temp'].min(),
-            "max": df['cell_temp'].max(),
-            "std": df['cell_temp'].std()
-        }
+        "voltage": {"mean": df['pack_voltage'].mean(), "min": df['pack_voltage'].min(), "max": df['pack_voltage'].max()},
+        "current": {"mean": df['pack_current'].mean(), "min": df['pack_current'].min(), "max": df['pack_current'].max()},
+        "temp": {"mean": df['cell_temp'].mean(), "min": df['cell_temp'].min(), "max": df['cell_temp'].max()}
     }
     
-    # Create prompt based on analysis type
+    # Create concise prompts based on analysis type
     if analysis_type == "performance":
         prompt = f"""
-        Analyze this battery module performance data and provide insights:
+        Battery performance analysis for {source or 'all sources'}:
+        {json.dumps(data_summary, indent=2)}
         
-        Data Summary: {json.dumps(data_summary, indent=2)}
-        Source: {source or 'All sources'}
+        Provide brief assessment of:
+        1. Overall performance (1-5 stars)
+        2. Key issues (if any)
+        3. Quick recommendations
         
-        Please provide:
-        1. Overall performance assessment
-        2. Key trends and patterns
-        3. Potential issues or concerns
-        4. Recommendations for optimization
-        5. Performance rating (1-10)
-        
-        Focus on battery health, efficiency, and operational insights.
-        """
-    elif analysis_type == "trends":
-        prompt = f"""
-        Analyze trends in this battery module data:
-        
-        Data Summary: {json.dumps(data_summary, indent=2)}
-        Source: {source or 'All sources'}
-        
-        Please identify:
-        1. Voltage trends over time
-        2. Current consumption patterns
-        3. Temperature variations
-        4. Seasonal or time-based patterns
-        5. Correlation between voltage, current, and temperature
-        
-        Provide specific trend analysis with actionable insights.
-        """
-    elif analysis_type == "anomalies":
-        prompt = f"""
-        Detect anomalies in this battery module data:
-        
-        Data Summary: {json.dumps(data_summary, indent=2)}
-        Source: {source or 'All sources'}
-        
-        Please identify:
-        1. Unusual voltage spikes or drops
-        2. Abnormal current consumption
-        3. Temperature anomalies
-        4. Potential system issues
-        5. Data quality concerns
-        
-        Flag any readings that seem suspicious or indicate problems.
+        Keep response under 100 words.
         """
     elif analysis_type == "battery_health":
         prompt = f"""
-        Analyze battery health and predict remaining lifespan based on this telemetry data:
+        Battery health analysis for {source or 'all sources'}:
+        {json.dumps(data_summary, indent=2)}
         
-        Data Summary: {json.dumps(data_summary, indent=2)}
-        Source: {source or 'All sources'}
-        
-        IMPORTANT: Start your response with a JSON block containing the health assessment:
+        Return in format:
         {{
             "health_percentage": <0-100>,
-            "confidence": <0-100>,
-            "analysis": "detailed text analysis"
+            "confidence": <0-100>
         }}
         
-        Then provide a comprehensive battery health analysis including:
-        
-        1. CURRENT HEALTH ASSESSMENT:
-           - Overall battery health percentage (0-100%)
-           - Capacity degradation estimate
-           - Internal resistance analysis
-           - Cell balance assessment
-        
-        2. PERFORMANCE ANALYSIS:
-           - Voltage stability and consistency
-           - Temperature impact on performance
-           - Charge/discharge efficiency
-           - Cycle depth analysis
-        
-        3. LIFESPAN PREDICTION:
-           - Estimated remaining cycles
-           - Predicted time to 80% capacity
-           - End-of-life estimation
-           - Confidence level in prediction
-        
-        4. DEGRADATION FACTORS:
-           - Temperature stress impact
-           - Overcharge/overdischarge events
-           - High current stress
-           - Age-related degradation
-        
-        5. RECOMMENDATIONS:
-           - Optimal charging strategies
-           - Temperature management
-           - Usage pattern optimization
-           - Maintenance schedule
-        
-        Base your analysis on LiFePO4 battery characteristics and real-world degradation patterns.
-        Provide specific percentages, timeframes, and actionable insights.
+        Then provide brief health assessment in 50 words.
+        Focus on critical issues only.
         """
     else:  # summary
         prompt = f"""
-        Provide a comprehensive summary of this battery module data:
+        Quick battery summary for {source or 'all sources'}:
+        {json.dumps(data_summary, indent=2)}
         
-        Data Summary: {json.dumps(data_summary, indent=2)}
-        Source: {source or 'All sources'}
-        
-        Please provide:
-        1. Executive summary
-        2. Key metrics overview
-        3. System health assessment
-        4. Operational status
-        5. Next steps or recommendations
+        Provide 2-3 sentence overview focusing on critical metrics and issues.
         """
     
     try:
-        print(f"🤖 Sending request to Gemini for {analysis_type} analysis...")
+        print(f"🤖 Requesting {analysis_type} analysis...")
         start_time = datetime.now()
-        response = gemini_model.generate_content(prompt)
+        
+        # Set generation config for shorter responses
+        response = gemini_model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.3,  # More focused responses
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 150  # Limit response length
+            }
+        )
+        
         response_time = (datetime.now() - start_time).total_seconds()
         response_text = response.text
         
-        print(f"🤖 Gemini response received in {response_time:.2f}s: {len(response_text)} characters")
-        print(f"🤖 Response preview: {response_text[:200]}...")
+        print(f"🤖 Response received in {response_time:.2f}s")
         
-        # Try to extract JSON from the beginning of the response
+        # Try to extract JSON health data if present
         import re
         json_match = re.search(r'\{[^{}]*"health_percentage"[^{}]*\}', response_text)
         
         if json_match:
             try:
                 json_data = json.loads(json_match.group())
-                health_percentage = json_data.get('health_percentage')
-                confidence = json_data.get('confidence')
-                
-                print(f"✅ Extracted health_percentage: {health_percentage}, confidence: {confidence}")
-                
                 return {
                     "content": response_text,
-                    "health_percentage": float(health_percentage) if health_percentage is not None else None,
-                    "confidence": float(confidence) if confidence is not None else None
+                    "health_percentage": float(json_data.get('health_percentage', 0)),
+                    "confidence": float(json_data.get('confidence', 0))
                 }
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"❌ Error parsing JSON from Gemini response: {e}")
-                print(f"❌ JSON match: {json_match.group()}")
-                # Fallback: try to extract percentage from text
+            except:
+                # Fallback to percentage extraction
                 percentage_match = re.search(r'(\d+(?:\.\d+)?)\s*%', response_text)
                 if percentage_match:
-                    try:
-                        health_percentage = float(percentage_match.group(1))
-                        print(f"✅ Extracted percentage from text: {health_percentage}%")
-                        return {
-                            "content": response_text,
-                            "health_percentage": health_percentage,
-                            "confidence": 70.0  # Default confidence
-                        }
-                    except ValueError:
-                        print(f"❌ Failed to convert percentage: {percentage_match.group(1)}")
-                        pass
+                    return {
+                        "content": response_text,
+                        "health_percentage": float(percentage_match.group(1)),
+                        "confidence": 70.0
+                    }
         
-        print(f"❌ No health percentage found in response")
-        # If no JSON or percentage found, return full response
         return {
             "content": response_text,
             "health_percentage": None,
@@ -414,9 +340,9 @@ def analyze_with_gemini(df: pd.DataFrame, analysis_type: str, source: str = None
         }
         
     except Exception as e:
-        print(f"❌ Error calling Gemini API: {e}")
+        print(f"❌ Gemini API error: {e}")
         return {
-            "content": f"Error analyzing data with Gemini: {str(e)}",
+            "content": "Analysis failed",
             "health_percentage": None,
             "confidence": None
         }
@@ -473,46 +399,49 @@ async def health_check():
 
 @app.post("/api/battery-data", response_model=BatteryResponse, tags=["Battery"])
 async def receive_battery_data(data: BatteryData):
-    """Receive battery telemetry data from QNX systems"""
+    """Receive and store battery telemetry data"""
     try:
-        # Debug: Log incoming data
-        print(f"🔋 Received battery data: {data.dict()}")
-        
-        # Validate input data
-        if data.pack_voltage < 0 or data.pack_current < -1000 or data.cell_temp < -50 or data.cell_temp > 100:
-            raise HTTPException(status_code=400, detail="Invalid battery data values")
-        
-        # Prepare telemetry data for MongoDB with proper type conversion
-        telemetry_entry = {
-            "timestamp": float(data.timestamp),
-            "pack_voltage": float(data.pack_voltage),
-            "pack_current": float(data.pack_current),
-            "cell_temp": float(data.cell_temp),
-            "source": str(data.source),
-            "received_at": datetime.now(timezone.utc)
+        # Check for anomalies based on thresholds from bat.py
+        anomaly_warning = None
+        if data.pack_voltage <= 50:
+            anomaly_warning = f"Low Voltage ({data.pack_voltage}V)"
+        elif data.pack_voltage >= 500:
+            anomaly_warning = f"High Voltage ({data.pack_voltage}V)"
+        elif data.pack_current <= 0:
+            anomaly_warning = f"Low Current ({data.pack_current}A)"
+        elif data.pack_current >= 100:
+            anomaly_warning = f"High Current ({data.pack_current}A)"
+        elif data.cell_temp <= -20:
+            anomaly_warning = f"Low Temperature ({data.cell_temp}°C)"
+        elif data.cell_temp >= 60:
+            anomaly_warning = f"High Temperature ({data.cell_temp}°C)"
+
+        # Prepare data for storage
+        telemetry_data = {
+            "timestamp": data.timestamp,
+            "pack_voltage": data.pack_voltage,
+            "pack_current": data.pack_current,
+            "cell_temp": data.cell_temp,
+            "source": data.source,
+            "received_at": datetime.now(timezone.utc),
+            "anomaly_warning": anomaly_warning
         }
-        
-        # Store in MongoDB
-        inserted_id = insert_telemetry(telemetry_entry)
-        
-        print(f"✅ Battery data stored in MongoDB: {telemetry_entry['source']} - ID: {inserted_id}")
-        print(f"📊 Data: V={telemetry_entry['pack_voltage']:.2f}V, I={telemetry_entry['pack_current']:.2f}A, T={telemetry_entry['cell_temp']:.1f}°C")
-        
-        return BatteryResponse(
-            message="Data received and stored successfully",
-            timestamp=telemetry_entry["received_at"].isoformat(),
-            data=data
-        )
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except ValueError as e:
-        print(f"❌ Validation error: {e}")
-        raise HTTPException(status_code=400, detail=f"Data validation error: {str(e)}")
+
+        # Store in database
+        insert_telemetry(telemetry_data)
+
+        # Debug log
+        if anomaly_warning:
+            print(f"⚠️ Anomaly detected: {anomaly_warning} for {data.source}")
+
+        return {
+            "message": "Data received successfully",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": data
+        }
     except Exception as e:
         print(f"❌ Error processing battery data: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/battery/current", tags=["Battery"])
 async def get_current_battery_data(source: Optional[str] = None):
@@ -780,107 +709,56 @@ async def test_quick_response():
 
 @app.post("/api/battery/calculate-soc", tags=["Battery"])
 async def calculate_soc_dynamic(request: SoCRequest):
-    """Dynamically calculate State of Charge using AI to determine battery type"""
+    """Dynamically calculate State of Charge using AI"""
     try:
         if not gemini_model:
-            return {
-                "soc": None,
-                "battery_type": "Unknown",
-                "confidence": None,
-                "error": "Gemini API not configured"
-            }
+            return {"soc": None, "error": "AI not configured"}
         
-        # Extract values from request body
-        voltage = request.voltage
-        current = request.current
-        temperature = request.temperature
-        
-        # Create prompt for battery type detection and SoC calculation
         prompt = f"""
-        Analyze this battery data and determine the battery type and State of Charge:
-        
-        Pack Voltage: {voltage}V
-        Pack Current: {current}A (if available)
-        Temperature: {temperature}°C (if available)
-        
-        Based on the voltage and any other available data, determine:
-        1. Most likely battery chemistry (LiFePO4, Li-ion, LiPo, Lead-acid, etc.)
-        2. Estimated cell count and configuration
-        3. State of Charge percentage (0-100%)
-        4. Confidence level in the calculation (0-100%)
-        
-        IMPORTANT: Start your response with a JSON block:
+        Battery data:
+        - Voltage: {request.voltage}V
+        - Current: {request.current}A
+        - Temperature: {request.temperature}°C
+
+        Return only in format:
         {{
-            "battery_type": "chemistry name",
-            "cell_count": <estimated number>,
-            "cell_voltage": <voltage per cell>,
-            "soc_percentage": <0-100>,
-            "confidence": <0-100>,
-            "voltage_range": {{
-                "min": <min voltage>,
-                "max": <max voltage>,
-                "nominal": <nominal voltage>
-            }},
-            "reasoning": "brief explanation of the calculation"
+            "battery_type": "<type>",
+            "cell_count": <number>,
+            "soc": <0-100>,
+            "confidence": <0-100>
         }}
-        
-        Then provide detailed analysis of how you determined the battery type and SoC.
         """
         
-        print(f"🔋 Calculating SoC for {voltage}V pack...")
-        start_time = datetime.now()
-        response = gemini_model.generate_content(prompt)
-        response_time = (datetime.now() - start_time).total_seconds()
-        response_text = response.text
+        response = gemini_model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.3,
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 100
+            }
+        )
         
-        print(f"🔋 SoC calculation completed in {response_time:.2f}s")
-        print(f"🔋 Gemini response: {response_text[:500]}...")
-        
-        # Try to extract JSON from the beginning of the response
+        # Extract JSON from response
         import re
-        json_match = re.search(r'\{[^{}]*"battery_type"[^{}]*\}', response_text)
+        json_match = re.search(r'\{[^{}]*"battery_type"[^{}]*\}', response.text)
         
         if json_match:
             try:
-                json_data = json.loads(json_match.group())
+                data = json.loads(json_match.group())
                 return {
-                    "soc": float(json_data.get('soc_percentage', 0)),
-                    "battery_type": json_data.get('battery_type', 'Unknown'),
-                    "cell_count": json_data.get('cell_count'),
-                    "cell_voltage": json_data.get('cell_voltage'),
-                    "confidence": float(json_data.get('confidence', 0)),
-                    "voltage_range": json_data.get('voltage_range', {}),
-                    "reasoning": json_data.get('reasoning', ''),
-                    "response_time": response_time,
-                    "full_analysis": response_text
+                    "soc": float(data.get('soc', 0)),
+                    "battery_type": data.get('battery_type', 'Unknown'),
+                    "cell_count": data.get('cell_count'),
+                    "confidence": float(data.get('confidence', 0))
                 }
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"❌ Error parsing JSON from SoC calculation: {e}")
-                return {
-                    "soc": None,
-                    "battery_type": "Unknown",
-                    "confidence": None,
-                    "error": f"Failed to parse AI response: {e}",
-                    "full_analysis": response_text
-                }
+            except:
+                return {"soc": None, "error": "Invalid response format"}
         else:
-            print(f"❌ No JSON found in SoC calculation response")
-            return {
-                "soc": None,
-                "battery_type": "Unknown",
-                "confidence": None,
-                "error": "No structured data found in AI response",
-                "full_analysis": response_text
-            }
+            return {"soc": None, "error": "No data found"}
             
     except Exception as e:
-        print(f"❌ Error in SoC calculation: {e}")
-        return {
-            "soc": None,
-            "battery_type": "Unknown",
-            "confidence": None,
-            "error": f"Calculation error: {str(e)}"
-        }
+        return {"soc": None, "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

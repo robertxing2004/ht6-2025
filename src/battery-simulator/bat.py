@@ -183,7 +183,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     print(f"\nSender connected to server at {HOST}:{PORT}")
     print("Sending module-level telemetry every 5 seconds...")
     
-    ANOMALY_PROBABILITY = 0.02  # 40% chance per step
+    ANOMALY_PROBABILITY = 0.20  # 40% chance per step
 
     for i in range(len(module_df)):
         # --- RANDOM ANOMALY GENERATOR (NO LOGGING) ---
