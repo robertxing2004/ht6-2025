@@ -2,10 +2,81 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
+#include <curl/curl.h>
+#include "json.hpp"
+#include <chrono>
+#include <thread>
+#include <string>
+#include <sstream>
+
+using json = nlohmann::json;
+
+// Callback function for CURL
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+    userp->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+// Function to send data to FastAPI backend
+bool sendToBackend(float timestamp, float pack_voltage, float pack_current, float cell_temp) {
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "Failed to initialize CURL" << std::endl;
+        return false;
+    }
+
+    // Create JSON payload using nlohmann/json
+    json root;
+    root["timestamp"] = timestamp;
+    root["pack_voltage"] = pack_voltage;
+    root["pack_current"] = pack_current;
+    root["cell_temp"] = cell_temp;
+    root["source"] = "qnx_listener";
+
+    std::string json_payload = root.dump();
+
+    // Set up CURL
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+
+    std::string response;
+
+    curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8000/api/battery-data");
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+
+    CURLcode res = curl_easy_perform(curl);
+    long http_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        std::cerr << "CURL request failed: " << curl_easy_strerror(res) << std::endl;
+        return false;
+    }
+
+    if (http_code == 200 || http_code == 201) {
+        std::cout << "Data sent to backend successfully" << std::endl;
+        return true;
+    } else {
+        std::cerr << "Backend returned HTTP " << http_code << ": " << response << std::endl;
+        return false;
+    }
+}
 
 int main() {
-    std::cout << "Starting listener..." << std::endl;
+    std::cout << "Starting QNX Listener with FastAPI backend integration..." << std::endl;
+    
+    // Initialize CURL
+    curl_global_init(CURL_GLOBAL_ALL);
+    
     const int PORT = 23456;
     int server_fd, client_fd;
     struct sockaddr_in address;
@@ -14,6 +85,16 @@ int main() {
     // Create socket
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket failed");
+        curl_global_cleanup();
+        return 1;
+    }
+
+    // Set socket options for reuse
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt failed");
+        close(server_fd);
+        curl_global_cleanup();
         return 1;
     }
 
@@ -24,40 +105,74 @@ int main() {
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("bind failed");
+        close(server_fd);
+        curl_global_cleanup();
         return 1;
     }
 
     // Listen
     if (listen(server_fd, 1) < 0) {
         perror("listen failed");
+        close(server_fd);
+        curl_global_cleanup();
         return 1;
     }
 
-    std::cout << "Listening on port " << PORT << "...\n";
-    fflush(stdout);
+    std::cout << "Listening on port " << PORT << "..." << std::endl;
+    std::cout << "Will send data to FastAPI backend at http://localhost:8000" << std::endl;
 
-    // Accept
-    if ((client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-        perror("accept failed");
-        return 1;
-    }
-
-    std::cout << "Client connected!\n";
-    fflush(stdout);
-
-    // Read loop
     while (true) {
-        float values[4];
-        ssize_t bytes_read = recv(client_fd, values, sizeof(values), MSG_WAITALL);
-        if (bytes_read <= 0) break;
+        std::cout << "Waiting for client connection..." << std::endl;
+        
+        // Accept
+        if ((client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+            perror("accept failed");
+            continue;
+        }
 
-        std::cout << "Time: " << values[0]
-                  << "  Pack Voltage: " << values[1]
-                  << "  Pack Current: " << values[2]
-                  << "  Cell Temp: " << values[3] << std::endl;
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(address.sin_addr), client_ip, INET_ADDRSTRLEN);
+        std::cout << "Client connected from " << client_ip << ":" << ntohs(address.sin_port) << std::endl;
+
+        // Read loop
+        while (true) {
+            float values[4];
+            ssize_t bytes_read = recv(client_fd, values, sizeof(values), MSG_WAITALL);
+            
+            if (bytes_read <= 0) {
+                std::cout << "Client disconnected" << std::endl;
+                break;
+            }
+
+            if (bytes_read == sizeof(values)) {
+                float timestamp = values[0];
+                float pack_voltage = values[1];
+                float pack_current = values[2];
+                float cell_temp = values[3];
+
+                // Display received data
+                std::cout << "Received: Time=" << timestamp 
+                          << "s, Voltage=" << pack_voltage 
+                          << "V, Current=" << pack_current 
+                          << "A, Temp=" << cell_temp << "°C" << std::endl;
+
+                // Send to FastAPI backend
+                bool success = sendToBackend(timestamp, pack_voltage, pack_current, cell_temp);
+                
+                if (!success) {
+                    std::cerr << "Failed to send data to backend, retrying..." << std::endl;
+                    // Wait a bit before retrying
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            } else {
+                std::cerr << "Incomplete data received: " << bytes_read << " bytes" << std::endl;
+            }
+        }
+
+        close(client_fd);
     }
 
-    close(client_fd);
     close(server_fd);
+    curl_global_cleanup();
     return 0;
 }

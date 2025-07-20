@@ -6,8 +6,8 @@ Write-Host "QNX Cross-Compilation for Raspberry Pi 4B" -ForegroundColor Green
 Write-Host '========================================' -ForegroundColor Green
 
 # Set QNX environment variables
-$env:QNX_HOST = "C:\Users\Daniel\qnx800\host\win64\x86_64"
-$env:QNX_TARGET = "C:\Users\Daniel\qnx800\target\qnx"
+$env:QNX_HOST = "C:\Users\erich\qnx800\host\win64\x86_64"
+$env:QNX_TARGET = "C:\Users\erich\qnx800\target\qnx"
 $env:PATH = "$env:QNX_HOST\usr\bin;$env:PATH"
 
 Write-Host "Setting up QNX SDP environment..." -ForegroundColor Yellow
@@ -34,6 +34,7 @@ $CXXFLAGS += " -I$env:QNX_TARGET\usr\include\aarch64"
 # Linker flags (simplified - only use essential libraries)
 $LDFLAGS = "-L$env:QNX_TARGET\usr\lib"
 $LDFLAGS += " -L$env:QNX_TARGET\usr\lib\aarch64"
+$LDFLAGS += " -L$env:QNX_TARGET\aarch64le\usr\lib"
 
 # Use only essential QNX libraries that are available
 $LIBS = "-lsocket"
@@ -94,7 +95,7 @@ $success = $true
 # Build listener
 Write-Host "Building listener..." -ForegroundColor Green
 if (Compile-Source "listener.cpp") {
-    if (Link-Objects "listener.o" "listener.exe") {
+    if (Link-Objects "listener.o" "listener.exe" "-lcurl") {
         Write-Host '✓ listener.exe built successfully' -ForegroundColor Green
     } else { 
         $success = $false 
