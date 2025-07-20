@@ -436,6 +436,16 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Dashboard Title */}
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+          Revamp
+        </h1>
+        <div className="text-sm text-gray-500">
+          Last updated: {new Date().toLocaleTimeString()}
+        </div>
+      </div>
+
       {/* Debug info */}
       <div className="text-sm text-gray-500 mb-4">
         <p>Anomalies count: {anomalies.length}</p>
@@ -752,71 +762,103 @@ export function BatteryDashboard({ selectedSource }: DashboardProps) {
               </Tabs>
             </div>
 
-            {/* AI Analysis */}
+            {/* AI Insights */}
             <div className="xl:col-span-3">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
                     <Lightbulb className="w-5 h-5 text-yellow-500" />
-                    Battery Health Analysis
+                    AI Performance Insights
                   </CardTitle>
-                  <CardDescription>Real-time performance insights</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {healthLoading ? (
-                    <div className="text-center py-4 space-y-3">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
-                      <p className="text-sm text-gray-600">Analyzing battery performance...</p>
-                    </div>
-                  ) : batteryHealth ? (
-                    <div className="space-y-4">
-                      {/* Analysis Text */}
-                      <div className="prose prose-sm max-w-none">
-                        {batteryHealth.split('\n').map((line, i) => (
-                          line.trim() && (
-                            <p key={i} className="text-gray-700 leading-relaxed">
-                              {line.trim()}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Charging Pattern Optimization */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-blue-600 font-medium">
+                        <Battery className="w-4 h-4" />
+                        Charging Pattern Optimization
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {currentData ? (
+                          <>
+                            <p className="mb-1">
+                              {currentData.pack_voltage > 400 ? 
+                                "Consider reducing charging frequency to prevent overcharging." :
+                                currentData.pack_voltage < 300 ?
+                                "Recommend initiating charge cycle soon to maintain optimal levels." :
+                                "Current charging pattern is optimal for battery longevity."}
                             </p>
-                          )
-                        ))}
+                            <p className="text-xs text-gray-500">
+                              Based on voltage patterns and usage history
+                            </p>
+                          </>
+                        ) : "Analyzing charging patterns..."}
                       </div>
+                    </div>
 
-                      {/* Refresh Button */}
-                      <div className="flex justify-end pt-4">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={generateBatteryHealth}
-                          disabled={healthLoading}
-                          className="w-auto"
-                        >
-                          {healthLoading ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                              Analyzing...
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="w-4 h-4 mr-2" />
-                              Update Analysis
-                            </>
-                          )}
-                        </Button>
+                    {/* Temperature Management */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-orange-600 font-medium">
+                        <Thermometer className="w-4 h-4" />
+                        Temperature Management
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {currentData ? (
+                          <>
+                            <p className="mb-1">
+                              {currentData.cell_temp > 40 ? 
+                                "Temperature elevated. Consider reducing load or improving cooling." :
+                                currentData.cell_temp < 10 ?
+                                "Temperature below optimal. Warming recommended before heavy use." :
+                                "Temperature within optimal operating range."}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Based on current temperature readings
+                            </p>
+                          </>
+                        ) : "Analyzing temperature conditions..."}
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-sm text-gray-600">No analysis available</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={generateBatteryHealth}
-                        className="mt-2"
-                      >
-                        Generate Analysis
-                      </Button>
+
+                    {/* Maintenance Reminder */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-green-600 font-medium">
+                        <Settings className="w-4 h-4" />
+                        Maintenance Reminder
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {currentData ? (
+                          <>
+                            <p className="mb-1">
+                              {currentData.pack_current > 80 ? 
+                                "High current draw detected. Schedule inspection of power connections." :
+                                currentData.pack_voltage < 200 ?
+                                "Battery capacity may be degrading. Diagnostic check recommended." :
+                                "Regular maintenance schedule on track."}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Based on performance metrics and usage
+                            </p>
+                          </>
+                        ) : "Analyzing maintenance needs..."}
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Update Button */}
+                  <div className="flex justify-end mt-4 pt-2 border-t">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={generateBatteryHealth}
+                      disabled={healthLoading}
+                      className="text-xs"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Update Insights
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>

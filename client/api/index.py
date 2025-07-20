@@ -271,17 +271,16 @@ def analyze_with_gemini(df: pd.DataFrame, analysis_type: str, source: str = None
         """
     elif analysis_type == "battery_health":
         prompt = f"""
-        Battery health analysis for {source or 'all sources'}:
+        Analyze this battery data and provide a brief, clear assessment:
         {json.dumps(data_summary, indent=2)}
         
-        Return in format:
-        {{
-            "health_percentage": <0-100>,
-            "confidence": <0-100>
-        }}
+        Provide a concise analysis in 3-4 short paragraphs:
+        1. Current Status: How is the battery performing right now?
+        2. Key Observations: What stands out in the voltage, current, and temperature?
+        3. Recommendations: Any specific actions needed?
         
-        Then provide brief health assessment in 50 words.
-        Focus on critical issues only.
+        Keep each paragraph to 2-3 sentences. Use simple, direct language.
+        Focus on practical insights that a technician would find useful.
         """
     else:  # summary
         prompt = f"""
