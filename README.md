@@ -1,6 +1,7 @@
 # ht6-2025
 
-[![Watch the video](https://img.youtube.com/vi/UbA8Ath_Yyg/maxresdefault.jpg)](https://www.youtube.com/embed/UbA8Ath_Yyg)
+## Demo Video
+[![Watch the video](https://img.youtube.com/vi/UbA8Ath_Yyg/maxresdefault.jpg)](https://youtu.be/UbA8Ath_Yyg?feature=shared)
 
 
 ## Inspiration
